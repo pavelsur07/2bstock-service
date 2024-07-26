@@ -25,55 +25,24 @@ pipeline {
             }
         }
         stage("Build") {
-            when {
-                branch "master"
-            }
-            steps {
-                sh "make build"
-            }
-        }
-        stage("Push") {
-            when {
-                branch "master"
-            }
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'REGISTRY_AUTH',
-                        usernameVariable: 'USER',
-                        passwordVariable: 'PASSWORD'
-                    )
-                ]) {
-                    sh 'docker login -u=$USER -p=$PASSWORD'
-                }
-                    sh "make push"
-            }
-        }
-        stage("Build") {
-            when {
-                branch "master"
-            }
-            steps {
-                sh "make build"
-            }
-        }
-        stage("Push") {
-            when {
-                branch "master"
-            }
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'REGISTRY_AUTH',
-                        usernameVariable: 'USER',
-                        passwordVariable: 'PASSWORD'
-                    )
-                ]) {
-                    sh 'docker login -u=$USER -p=$PASSWORD'
-                }
-                    sh "make push"
-            }
-        }
+           steps {
+               sh "make build"
+           }
+       }
+       stage("Push") {
+           steps {
+               withCredentials([
+                   usernamePassword(
+                       credentialsId: 'DOCKER_HUB_AUTH',
+                       usernameVariable: 'USER',
+                       passwordVariable: 'PASSWORD'
+                   )
+               ]) {
+                   sh 'docker login -u=$USER -p=$PASSWORD'
+               }
+                   sh "make push"
+           }
+       }
         stage("Deploy") {
             when {
                 branch "master"
