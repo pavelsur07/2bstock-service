@@ -18,26 +18,7 @@ pipeline {
                 sh "make init"
             }
         }
-        stage("Valid") {
-            steps {
-                sh "make account-validate-schema"
-            }
-        }
-        stage("Lint") {
-            steps {
-                sh "make account-cs-fix"
-            }
-        }
-//         stage("Analyze") {
-//             steps {
-//                  sh "make account-analyze"
-//             }
-//         }
-//        stage("Test") {
-//            steps {
-//                sh "make account-test"
-//            }
-//        }
+
         stage("Down") {
             steps {
                 sh "make docker-down-clear"
@@ -91,27 +72,6 @@ pipeline {
                     sh 'docker login -u=$USER -p=$PASSWORD'
                 }
                     sh "make push"
-            }
-        }
-        stage("Staging-deploy") {
-            when {
-                branch "staging"
-            }
-            steps {
-                withCredentials([
-                    string(credentialsId: 'STAGING_HOST', variable: 'HOST'),
-                    string(credentialsId: 'STAGING_PORT', variable: 'PORT'),
-                    string(credentialsId: 'STAGING_ACCOUNT_DB_PASSWORD', variable: 'ACCOUNT_DB_PASSWORD'),
-                    string(credentialsId: 'STAGING_ACCOUNT_REDIS_PASSWORD', variable: 'ACCOUNT_REDIS_PASSWORD'),
-                    string(credentialsId: 'STAGING_ACCOUNT_APP_SECRET', variable: 'ACCOUNT_APP_SECRET'),
-                    string(credentialsId: 'STAGING_ACCOUNT_SENTRY_DSN', variable: 'ACCOUNT_SENTRY_DSN'),
-                    string(credentialsId: 'STAGING_ACCOUNT_MAIL_PASSWORD', variable: 'ACCOUNT_MAIL_PASSWORD'),
-                    string(credentialsId: 'STAGING_ACCOUNT_STORAGE_FTP_PASSWORD', variable: 'STORAGE_FTP_PASSWORD'),
-                ]) {
-                    sshagent (credentials: ['STAGING_AUTH']) {
-                        sh "BUILD_NUMBER=${env.BUILD_NUMBER} make deploy-staging"
-                    }
-                }
             }
         }
         stage("Prod-deploy") {
