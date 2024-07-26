@@ -49,17 +49,17 @@ pipeline {
                     sh "make push"
             }
         }
-        stage("Staging-build") {
+        stage("Build") {
             when {
-                branch "staging"
+                branch "master"
             }
             steps {
                 sh "make build"
             }
         }
-        stage("Staging-push") {
+        stage("Push") {
             when {
-                branch "staging"
+                branch "master"
             }
             steps {
                 withCredentials([
@@ -74,7 +74,7 @@ pipeline {
                     sh "make push"
             }
         }
-        stage("Prod-deploy") {
+        stage("Deploy") {
             when {
                 branch "master"
             }
