@@ -1,0 +1,190 @@
+version: "3.9"
+services:
+  traefik:
+    image: traefik:2.4
+    command:
+      --providers.docker=true
+      --providers.docker.exposedByDefault=false
+      --entryPoints.http.address=:80
+    ports:
+      - "80:80"
+    networks:
+      - traefik-public
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-public
+  
+  account:
+    build:
+      context: account/docker
+      dockerfile: development/nginx/Dockerfile
+    volumes:
+      - ./account:/app
+    networks:
+      - traefik-public
+      - default
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-public
+      - traefik.http.routers.seller.rule=Host(`localhost`)
+      - traefik.http.routers.seller.entryPoints=http
+      - traefik.http.services.seller.loadBalancer.server.port=80
+  
+  account-php-fpm:
+    build:
+      context: account/docker
+      dockerfile: development/php-fpm/Dockerfile
+    environment:
+      APP_ENV: dev
+      APP_DEBUG: 1
+      SENTRY_DSN: ""
+    volumes:
+      - ./account:/app
+    depends_on:
+      - account-postgres
+      - account-redis
+      - account-queue-redis
+
+  account-php-cli:
+    build:
+      context: account/docker
+      dockerfile: development/php-cli/Dockerfile
+    environment:
+      APP_ENV: dev
+      APP_DEBUG: 1
+      SENTRY_DSN: ""
+      DB_HOST: account-postgres
+      DB_USER: app
+    volumes:
+      - ./account:/app
+
+  account-queue-worker-async:
+    build:
+      context: account/docker
+      dockerfile: development/php-cli/Dockerfile
+    environment:
+      APP_ENV: dev
+      APP_DEBUG: 1
+      SENTRY_DSN: ""
+    volumes:
+      - ./account:/app
+      - composer:/root/.composer/cache
+    command: sh -c "sleep 1 && php bin/console messenger:consume async -vv"
+    
+
+  account-node-watch:
+    build:
+      context: account/docker
+      dockerfile: common/node/Dockerfile
+    volumes:
+      - ./account:/app
+    working_dir: /app
+    command: sh -c "until [ -f .ready ] ; do sleep 1 ; done && yarn run watch"
+    tty: true
+
+  account-node-cli:
+    build:
+      context: account/docker
+      dockerfile: common/node/Dockerfile
+    volumes:
+      - ./account:/app
+    working_dir: /app
+
+  account-postgres:
+    image: postgres:13.3-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: app
+    volumes:
+      - account-postgres:/var/lib/postgresql/data
+    ports:
+      - "54321:5432"
+  
+  account-mailer:
+    image: mailhog/mailhog
+    networks:
+      - traefik-public
+      - default
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-public
+      - traefik.http.routers.mailer.rule=Host(`mailer.localhost`)
+      - traefik.http.routers.mailer.entryPoints=http
+      - traefik.http.services.mailer.loadBalancer.server.port=8025
+
+  account-redis:
+    image: redis:6.2-alpine
+    volumes:
+      - account-redis:/data
+    command:
+      - 'redis-server'
+      - '--databases 2'
+      - '--save 900 1'
+      - '--save 300 10'
+      - '--save 60 10000'
+      - '--requirepass secret'
+    ports:
+      - "6379:6379"
+
+  account-queue-redis:
+    image: redis:6.2-alpine
+    volumes:
+      - account-queue-redis:/data
+  
+  adminer:
+    image: adminer
+    restart: always
+    networks:
+      - traefik-public
+      - default
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-public
+      - traefik.http.routers.adminer.rule=Host(`adminer.localhost`)
+      - traefik.http.routers.adminer.entrypoints=http
+      - traefik.http.services.adminer.loadBalancer.server.port=8080
+    depends_on:
+      - account-postgres
+  
+  storage:
+    build:
+      context: ./storage/docker/development
+      dockerfile: nginx.docker
+    volumes:
+      - ./storage:/app
+    networks:
+      - traefik-public
+      - default
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-public
+      - traefik.http.routers.storage.rule=Host(`storage.localhost`)
+      - traefik.http.routers.storage.entryPoints=http
+      - traefik.http.services.storage.loadBalancer.server.port=80
+  
+  storage-ftp:
+    image: stilliard/pure-ftpd
+    ports:
+      - "21:21"
+    environment:
+      FTP_USER_NAME: app
+      FTP_USER_PASS: secret
+      FTP_USER_HOME: /app
+    volumes:
+      - ./storage/public:/app
+
+volumes:
+  account-clickhouse:
+  account-postgres:
+  account-queue-redis:
+  account-redis:
+  account-backup-storage:
+  composer:
+  
+networks:
+  traefik-public:
+    name: traefik-public
+    driver: bridge

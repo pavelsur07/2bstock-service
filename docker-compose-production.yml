@@ -1,0 +1,164 @@
+version: "3.9"
+services:
+  cron:
+    image: crazymax/swarm-cronjob:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      LOG_LEVEL: info
+    deploy:
+      placement:
+        constraints: [ node.role == manager ]
+  
+  account:
+    image: ${REGISTRY}/account:${IMAGE_TAG}
+    networks:
+      - traefik-public
+      - default
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=traefik-public
+        - traefik.http.routers.frontend.rule=Host(`2bstock.ru`) || Host(`www.2bstock.ru`)
+        - traefik.http.services.frontend.loadBalancer.server.port=80
+        - traefik.http.middlewares.frontend-redirect.redirectRegex.regex=^(https?://)www.2bstock.ru/(.*)$$
+        - traefik.http.middlewares.frontend-redirect.redirectRegex.replacement=$${1}.2bstock.ru/$${2}
+        - traefik.http.middlewares.frontend-redirect.redirectRegex.permanent=true
+        - traefik.http.routers.frontend.middlewares=frontend-redirect,secure-headers
+        - traefik.http.routers.frontend.entryPoints=https
+        - traefik.http.routers.frontend.tls=true
+        - traefik.http.routers.frontend.tls.certResolver=letsEncrypt
+      mode: replicated
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        
+
+  account-php-fpm:
+    image: ${REGISTRY}/account-php-fpm:${IMAGE_TAG}
+    environment:
+      APP_SECRET: ${ACCOUNT_APP_SECRET}
+      APP_ENV: prod
+      APP_DEBUG: 0
+      DB_NAME: app
+      DATABASE_URL: pgsql://app:${ACCOUNT_DB_PASSWORD}@account-postgres:5432/app
+      MAILER_DSN: smtp://mail@2bstock.com:${ACCOUNT_MAIL_PASSWORD}@smtp.mail.ru:465
+      REDIS_HOST: account-redis
+      REDIS_PASSWORD: ${ACCOUNT_REDIS_PASSWORD}
+      MESSENGER_TRANSPORT_DSN: redis://account-queue-redis:6379/messages?password=${ACCOUNT_REDIS_PASSWORD}
+      SENTRY_DSN: ${ACCOUNT_SENTRY_DSN}
+      CLICKHOUSE_DB: app
+      CLICKHOUSE_USER: app
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      CLICKHOUSE_PASSWORD: ${ACCOUNT_DB_PASSWORD}
+    deploy:
+      mode: replicated
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 5s
+        
+
+  account-queue-worker:
+    image: ${REGISTRY}/account-php-cli:${IMAGE_TAG}
+    environment:
+      APP_SECRET: ${ACCOUNT_APP_SECRET}
+      APP_ENV: prod
+      APP_DEBUG: 0
+      DB_NAME: app
+      DATABASE_URL: pgsql://app:${ACCOUNT_DB_PASSWORD}@account-postgres:5432/app
+      MAILER_DSN: smtp://mail@2bstock.com:${ACCOUNT_MAIL_PASSWORD}@smtp.mail.ru:465
+      REDIS_HOST: account-redis
+      REDIS_PASSWORD: ${ACCOUNT_REDIS_PASSWORD}
+      MESSENGER_TRANSPORT_DSN: redis://account-queue-redis:6379/messages?password=${ACCOUNT_REDIS_PASSWORD}
+      SENTRY_DSN: ${ACCOUNT_SENTRY_DSN}
+      CLICKHOUSE_DB: app
+      CLICKHOUSE_USER: app
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      CLICKHOUSE_PASSWORD: ${ACCOUNT_DB_PASSWORD}
+    command: sh -c "sleep 30 && php bin/console messenger:consume async -vv"
+    deploy:
+      mode: replicated
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 5s
+        
+
+  account-migration:
+    image: ${REGISTRY}/account-php-cli:${IMAGE_TAG}
+    environment:
+      APP_SECRET: ${ACCOUNT_APP_SECRET}
+      APP_ENV: prod
+      APP_DEBUG: 0
+      DATABASE_URL: pgsql://app:${ACCOUNT_DB_PASSWORD}@account-postgres:5432/app
+      MAILER_DSN: smtp://mail@2bstock.com:${ACCOUNT_MAIL_PASSWORD}@smtp.mail.ru:465
+      REDIS_HOST: account-redis
+      REDIS_PASSWORD: ${ACCOUNT_REDIS_PASSWORD}
+      MESSENGER_TRANSPORT_DSN: redis://account-queue-redis:6379/messages?password=${ACCOUNT_REDIS_PASSWORD}
+      SENTRY_DSN: ${ACCOUNT_SENTRY_DSN}
+    command: sh -c 'wait-for-it account-postgres:5432 -t 60 && php bin/console doctrine:schema:update --force'
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+
+  account-postgres:
+    image: postgres:13.3-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${ACCOUNT_DB_PASSWORD}
+      POSTGRES_DB: app
+    volumes:
+      - account-postgres:/var/lib/postgresql/data
+    deploy:
+      placement:
+        constraints: [ node.labels.db == master ]
+      endpoint_mode: dnsrr
+
+  account-redis:
+    image: redis:6.2-alpine
+    restart: always
+    command:
+      - 'redis-server'
+      - '--databases 2'
+      - '--save 900 1'
+      - '--save 300 10'
+      - '--save 60 10000'
+      - '--requirepass ${ACCOUNT_REDIS_PASSWORD}'
+    volumes:
+      - account-redis:/data
+    deploy:
+      placement:
+        constraints: [ node.labels.db == master ]
+      endpoint_mode: dnsrr
+  
+  account-queue-redis:
+    image: redis:6.2-alpine
+    volumes:
+      - account-queue-redis:/data
+    command:
+      - 'redis-server'
+      - '--databases 2'
+      - '--save 900 1'
+      - '--save 300 10'
+      - '--save 60 10000'
+      - '--requirepass ${ACCOUNT_REDIS_PASSWORD}'
+    deploy:
+      placement:
+        constraints: [ node.labels.db == master ]
+      endpoint_mode: dnsrr
+
+volumes:
+  account-postgres:
+  account-redis:
+  account-queue-redis:
+  account-clickhouse:
+  
+networks:
+  traefik-public:
+    external: true
