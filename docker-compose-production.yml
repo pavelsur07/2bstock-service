@@ -93,10 +93,6 @@ services:
       REDIS_PASSWORD: ${ACCOUNT_REDIS_PASSWORD}
       MESSENGER_TRANSPORT_DSN: redis://account-queue-redis:6379/messages?password=${ACCOUNT_REDIS_PASSWORD}
       SENTRY_DSN: ${ACCOUNT_SENTRY_DSN}
-      CLICKHOUSE_DB: app
-      CLICKHOUSE_USER: app
-      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
-      CLICKHOUSE_PASSWORD: ${ACCOUNT_DB_PASSWORD}
     deploy:
       mode: replicated
       replicas: 1
@@ -118,10 +114,6 @@ services:
       REDIS_PASSWORD: ${ACCOUNT_REDIS_PASSWORD}
       MESSENGER_TRANSPORT_DSN: redis://account-queue-redis:6379/messages?password=${ACCOUNT_REDIS_PASSWORD}
       SENTRY_DSN: ${ACCOUNT_SENTRY_DSN}
-      CLICKHOUSE_DB: app
-      CLICKHOUSE_USER: app
-      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
-      CLICKHOUSE_PASSWORD: ${ACCOUNT_DB_PASSWORD}
     command: sh -c "sleep 30 && php bin/console messenger:consume async -vv"
     deploy:
       mode: replicated
@@ -143,7 +135,7 @@ services:
       REDIS_PASSWORD: ${ACCOUNT_REDIS_PASSWORD}
       MESSENGER_TRANSPORT_DSN: redis://account-queue-redis:6379/messages?password=${ACCOUNT_REDIS_PASSWORD}
       SENTRY_DSN: ${ACCOUNT_SENTRY_DSN}
-    command: sh -c 'wait-for-it account-postgres:5432 -t 60 && php bin/console doctrine:schema:update --force'
+    command: sh -c 'wait-for-it site-postgres:5432 -t 60 && php bin/console doctrine:migrations:migrate --no-interaction'
     deploy:
       restart_policy:
         condition: on-failure
