@@ -30,7 +30,7 @@ account-update: account-composer-update account-yarn-upgrade
 
 account-init: account-permissions \
 	account-composer-install account-assets-install \
-	account-wait-db account-ready account-schema-update-force  \
+	account-wait-db account-ready  \
 	account-assets-build #account-migrations account-ready #account-fixtures account-ready
 
 account-permissions:
