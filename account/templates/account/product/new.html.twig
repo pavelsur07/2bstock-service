@@ -1,0 +1,12 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    <h1>Create product</h1>
+    <div class="mb-3">
+        {{ form_start(form) }}
+        {{ form_widget(form) }}
+        <button class="btn btn-bitbucket">{{ button_label|default('Save') }}</button>
+        {{ form_end(form) }}
+    </div>
+{% endblock %}
+
