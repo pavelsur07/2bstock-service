@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
     <head>
         <meta charset="UTF-8">
         <title>{% block title %}Welcome!{% endblock %}</title>
@@ -14,8 +14,8 @@
     </head>
     <body>
         <ul>
-            <li><a href="#">Admin</a></li>
-            <li><a href="#">Account</a></li>
+            <li><a href="{{ path('admin.dashboard') }}">Admin</a></li>
+            <li><a href="{{ path('account.dashboard') }}">Account</a></li>
         </ul>
         {% block body %}{% endblock %}
     </body>
