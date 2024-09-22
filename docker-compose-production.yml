@@ -199,3 +199,4 @@ volumes:
 networks:
   traefik-public:
     external: true
+    driver: bridge
